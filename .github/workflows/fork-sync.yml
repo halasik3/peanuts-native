@@ -1,0 +1,85 @@
+# FORK (halasik3/peanuts-native): merges igawa6/peanuts-native's main into this fork's main every 6 hours, then starts fork-release.yml.
+# A merge conflict, or a push GitHub refuses (upstream changed a workflow file and no SYNC_TOKEN secret is set), opens an issue instead of failing quietly.
+name: fork-sync
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/igawa6/peanuts-native
+
+jobs:
+  sync:
+    if: github.repository != 'igawa6/peanuts-native'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Optional: a fine-grained token with Contents + Workflows write lets the sync push upstream changes to .github/workflows too.
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "$UPSTREAM" main:refs/remotes/upstream/main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already up to date with upstream $(git rev-parse --short upstream/main)"; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          n=$(git rev-list --count HEAD..upstream/main)
+          if git merge --no-edit -m "Sync with upstream igawa6/peanuts-native ($n commits, $(git rev-parse --short upstream/main))" upstream/main; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push
+        id: push
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          if git push origin HEAD:main 2> "$RUNNER_TEMP/push.err"; then echo "ok=true" >> "$GITHUB_OUTPUT"; else cat "$RUNNER_TEMP/push.err"; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Start a release build
+        if: steps.push.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run fork-release.yml --ref main
+
+      - name: Report a sync that needs a hand
+        if: steps.merge.outputs.conflict == 'true' || steps.push.outputs.ok == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "The automatic sync with upstream ($UPSTREAM, \`$(git rev-parse --short upstream/main)\`) could not finish."
+            echo
+            if [ -f "$RUNNER_TEMP/conflicts.txt" ]; then
+              echo "**Merge conflict** in:"; echo; sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/conflicts.txt"
+              echo; echo "These files are changed both here and upstream. Resolve the merge by hand (or ask for help), then push."
+            else
+              echo "**Push refused.** Usually upstream changed a file under \`.github/workflows\`, which the built-in token may not push."
+              echo; echo "Fix: press **Sync fork → Update branch** on the repository page, or add a \`SYNC_TOKEN\` secret (a fine-grained token with Contents and Workflows write on this repository)."
+              echo; echo '```'; cat "$RUNNER_TEMP/push.err" 2>/dev/null; echo '```'
+            fi
+          } > "$RUNNER_TEMP/issue.md"
+          existing=$(gh issue list --state open --label sync --json number --jq '.[0].number' 2>/dev/null || true)
+          gh label create sync --color FBCA04 --description "Upstream sync problems" 2>/dev/null || true
+          if [ -n "$existing" ]; then gh issue comment "$existing" --body-file "$RUNNER_TEMP/issue.md"
+          else gh issue create --title "Upstream sync needs attention" --label sync --body-file "$RUNNER_TEMP/issue.md"; fi
+          exit 1

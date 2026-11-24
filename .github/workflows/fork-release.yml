@@ -1,0 +1,152 @@
+# FORK (halasik3/peanuts-native): builds the "Peanuts FEW" app and publishes it as a GitHub release with a changelog.
+# The app installs beside the official Peanuts Native (dev.nxnative.android.peanutsfew, its own data), signed with fork/debug.keystore so every
+# release installs over the previous one. Runs after each upstream sync (fork-sync.yml), on every push to main, and by hand.
+name: fork-release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Publish even if nothing changed since the last release
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+env:
+  APP_ID_SUFFIX: peanutsfew
+  APP_LABEL: Peanuts FEW
+  NDK_VERSION: 28.2.13676358
+  UPSTREAM: https://github.com/igawa6/peanuts-native
+
+defaults:
+  run:
+    shell: bash -el {0}
+
+jobs:
+  release:
+    if: github.repository != 'igawa6/peanuts-native'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Anything new since the last release?
+        id: gate
+        run: |
+          last=$(git tag --list 'few-v*' --sort=-creatordate | head -1)
+          echo "last=$last" >> "$GITHUB_OUTPUT"
+          if [ -n "$last" ] && [ "$(git rev-list -n1 "$last")" = "$(git rev-parse HEAD)" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "HEAD is already released as $last"; echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Version
+        if: steps.gate.outputs.skip == 'false'
+        id: ver
+        run: |
+          base=$(tr -d '[:space:]' < peanuts/VERSION)
+          n=${{ github.run_number }}
+          echo "version=${base}-few.${n}" >> "$GITHUB_OUTPUT"
+          echo "code=$((100000 + n))" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          dotnet-version: '10.0.1xx'
+
+      - uses: mamba-org/setup-micromamba@v2
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          environment-file: android/environment.yml
+          environment-name: bananative
+          cache-environment: true
+
+      - name: Build tools, Android SDK and NDK
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq zsh ninja-build cmake zlib1g-dev >/dev/null
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK_VERSION" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "STAGE_WORK=$RUNNER_TEMP/ondevice" >> "$GITHUB_ENV"
+          python3 --version
+
+      # The on-device packer (Python for Android, the shader translator, SPIRV-Tools) is the slow part: cached by the sources it is built from.
+      - name: Cache the on-device packer stage
+        if: steps.gate.outputs.skip == 'false'
+        id: stage-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ondevice/stage
+          key: stage-${{ hashFiles('android/ondevice/**', 'dm/gfx/tools/**', 'dm/third_party/**', 'dm/peanuts/pack_worker/**', 'dm/pack/**', 'dm/tools/**', 'peanuts/scripts/ondevice-stage.sh') }}
+
+      - name: Cache the stage's downloads
+        if: steps.gate.outputs.skip == 'false' && steps.stage-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ondevice/dl
+          key: stage-dl-${{ hashFiles('android/ondevice/build.sh') }}
+
+      - name: Build the on-device packer stage
+        if: steps.gate.outputs.skip == 'false' && steps.stage-cache.outputs.cache-hit != 'true'
+        run: zsh peanuts/scripts/ondevice-stage.sh "$STAGE_WORK" all
+
+      - name: Build the APK
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          mkdir -p ~/.android && cp fork/debug.keystore ~/.android/debug.keystore
+          echo "sdk.dir=$ANDROID_HOME" > android/app/local.properties
+          games=$(cat peanuts/release-titles.txt fork/extra-titles.txt 2>/dev/null | sed 's/#.*//' | tr -d '[:blank:]\r' | grep -E '^[0-9A-F]{16}$' | while read -r t; do [ -f "dm/games/$t/game.tsv" ] && echo "$t"; done | awk '!s[$0]++' | paste -sd, -)
+          echo "games: $games"
+          cd android/app
+          chmod +x gradlew
+          ./gradlew --no-daemon apk \
+            -PnxApp=peanuts -PnxAppId="$APP_ID_SUFFIX" -PnxLabel="$APP_LABEL" \
+            -PnxVersion="${{ steps.ver.outputs.version }}" -PnxVersionCode="${{ steps.ver.outputs.code }}" \
+            -PnxGames="$games" -PnxPackStage="$STAGE_WORK/stage"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp out/nxnative-android-peanuts.apk "$RUNNER_TEMP/out/peanuts-few-${{ steps.ver.outputs.version }}-${{ steps.ver.outputs.sha }}.apk"
+
+      - name: Release notes
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          git fetch --quiet --no-tags "$UPSTREAM" main:refs/remotes/upstream/main || true
+          sh fork/scripts/release-notes.sh "${{ steps.gate.outputs.last }}" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Publish
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="few-v${{ steps.ver.outputs.version }}"
+          gh release create "$tag" "$RUNNER_TEMP"/out/*.apk \
+            --target "$(git rev-parse HEAD)" \
+            --title "Peanuts FEW ${{ steps.ver.outputs.version }}" \
+            --notes-file "$RUNNER_TEMP/notes.md" --latest
+
+      - name: Keep the APK as an artifact on failure of the release step
+        if: failure() && steps.gate.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: ${{ runner.temp }}/out/*.apk
+          if-no-files-found: ignore
