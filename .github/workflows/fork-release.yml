@@ -87,7 +87,11 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK_VERSION" >/dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           echo "STAGE_WORK=$RUNNER_TEMP/ondevice" >> "$GITHUB_ENV"
+          # The micromamba environment carries a .NET runtime only; the translator build needs setup-dotnet's SDK first on PATH.
+          echo "/usr/share/dotnet" >> "$GITHUB_PATH"
+          echo "DOTNET_ROOT=/usr/share/dotnet" >> "$GITHUB_ENV"
           python3 --version
+          /usr/share/dotnet/dotnet --list-sdks
 
       # The on-device packer (Python for Android, the shader translator, SPIRV-Tools) is the slow part: cached by the sources it is built from.
       - name: Cache the on-device packer stage
@@ -107,7 +111,10 @@ jobs:
 
       - name: Build the on-device packer stage
         if: steps.gate.outputs.skip == 'false' && steps.stage-cache.outputs.cache-hit != 'true'
-        run: zsh peanuts/scripts/ondevice-stage.sh "$STAGE_WORK" all
+        run: |
+          export PATH="/usr/share/dotnet:$PATH" DOTNET_ROOT=/usr/share/dotnet
+          dotnet --version
+          zsh peanuts/scripts/ondevice-stage.sh "$STAGE_WORK" all || { echo "---- xlate.log"; tail -60 "$STAGE_WORK/xlate.log" 2>/dev/null; exit 1; }
 
       - name: Build the APK
         if: steps.gate.outputs.skip == 'false'
