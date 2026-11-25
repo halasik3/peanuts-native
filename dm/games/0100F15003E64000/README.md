@@ -31,9 +31,10 @@ Status: boots and plays on Android (2026-11-25, AYN Odin 3, Adreno 830, Turnip G
 
 - **Particle data a few frames old** (resolved: few.9 on the Odin 3, the torches no longer flicker, 59 fps in battle; 2026-11-25). With the conversion in, the torches still flickered off (while attacking and while the camera pans), leaving a dark spot, and lights and the background mountains flickered while panning left (2026-11-25, Odin 3, Turnip). The log names five 16384x65 buffer textures (format `0xb`, with a 256x1 `0x2e` view at the same start, ~4 MB each) that compute writes through storage buffers: `a GPU write into its storage (store …) is done, re-uploaded`, 65,536 re-uploads in 13 minutes. The draws read them as images, and this fork's row image of a buffer texture takes the CPU's bytes at recording unless a storage *texel* buffer's stores are pending, so with five buffers in turn they showed the particles of five frames before while the counts (now read on the GPU) were this frame's. Fix (general, `vka_draw.c` `stage_writes`, marked PEANUTS): a storage buffer's stores count as such pending stores too (`vka_tex_gw_tbuf`), so the read goes in GPU order (upstream's copy on the GPU). `DM_VK_TBUF_GW_SB=0` turns it off. The black-faced enemies may be the same (data computed on the GPU, read a few frames late): check with this build.
 
+- **Dark captains are the game's look** (resolved, not a bug): the captain Myrmidons in chapter 2 have a black body with white and steel armour on the Switch too (console footage, 2026-11-25); two switches (`DM_VK_TEX_TRACK=0`, `DM_VK_POOL_FB=0`) changed nothing.
+
 ## Open
 
 - Run-time capture: done, the menus' text and the movies' picture show (2026-11-25).
-- Dark captains: only the captains (named enemy units), darker shading that may shift a little with the camera; unchanged with `DM_VK_TEX_TRACK=0` and `DM_VK_POOL_FB=0` (few.9, 2026-11-25), and no log line points at them. Probably the game's own material (worn steel), not confirmed against console footage; reopen if footage shows them lit like the soldiers.
 - Distant mountains appearing and disappearing with the camera: looks like the game's own draw distance (not a bug as far as seen).
 - A battle; the system driver; the AYN Thor.

@@ -9,7 +9,7 @@ Fire Emblem Warriors has got. Older entries move under "History".
 - **This build draws the special-attack and hit particles properly.** Their vertex counts are computed on the GPU, and now the GPU also
   turns them into the draw (before, the CPU guessed them too early: a hang, later black squares around torches during hits).
 - **Torches and lights no longer flicker** (few.9): particle data computed on the GPU was read from a copy several frames old.
-- Dark captains: likely the game's own look (two switches changed nothing); not confirmed against the console.
+- Dark captains: the game's own look (the Switch shows them the same).
 
 ## History
 
