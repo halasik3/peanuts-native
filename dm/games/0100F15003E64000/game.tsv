@@ -1,0 +1,47 @@
+# Fire Emblem Warriors (0100F15003E64000), update 1.5.0 (v327680). SDK 3.7.0, Koei Tecmo's KTGL engine on NVN, modules main, subsdk0 (GLSLC),
+# subsdk1 (NintendoSDK_movie), sdk. Started from the NSP script's provisional profile (2026-11-25), with Hyrule Warriors: Definitive Edition's keys
+# (0100AE00096EA000, same engine and team, SDK 3.5.1) where the two games match. Plays on Android on Turnip (AYN Odin 3): README.md beside this file.
+# PEANUTS: new profile, provisional (see README.md); the shader tables are the split's output, unchanged.
+
+# ---- Identity ----
+title_id	0100F15003E64000
+program_id	0100F15003E64000
+
+# ---- App ----
+name	Fire Emblem Warriors
+ipa	FireEmblemWarriors.ipa
+app_category	public.app-category.action-games
+# the 3D gamepad layout: the camera is on the right stick (as Hyrule Warriors: Definitive Edition)
+pad_layout	full
+# PEANUTS: storage-buffer stores order buffer textures. The GPU particles' data is written by compute through storage buffers and read as buffer textures;
+# without this the draws read it five frames late and torches and lights flicker (README.md, Effects; DM_VK_TBUF_GW_SB, docs/reference/rendering.md). On by recommendation
+option	DM_VK_TBUF_GW_SB	Fresh particle data	Keeps fire, sparks and other effects in step with the game. Turn it off only to compare: torches and lights flicker without it	restart
+# PEANUTS: Fresh particle data on every phone: measured on the Odin 3 (README.md, Effects: the torches stop flickering, 59 fps in battle with it)
+recommend	any	option.DM_VK_TBUF_GW_SB=on
+# PEANUTS: Turnip on Qualcomm's own driver (README.md, Effects). On the Odin 3's 0x80320048 the compiler took 5-17 s a graphics pipeline (menu draws missing
+# meanwhile) and 16-52 s a GLSLC compute pipeline, failed three of them (-13), and its allocations filled vm.max_map_count until std::bad_alloc in a special attack
+recommend	driver.id=8	driver=18
+
+# ---- Versions ----
+build	v327680	1.5.0	main=1953770037acc52a4e28bf7aa5968c03	subsdk0=30fe832b279d4b7c7b63023c995db787	subsdk1=434bc9467960230aee33c2fad7940cc1	sdk=4fea41dd7345eca3a4ce829c398227a4
+package	v327680
+shader_versions	v327680
+
+# ---- Files ----
+# every module main imports from
+modules	main subsdk0 subsdk1 sdk
+romfs_marker	nx/sound/bgm/eng/BGMProduct.g1l
+zip_store	.arc:.g1l:.gz:.mp4:.metallib
+
+# ---- Memory ----
+# main sets a heap of at most the pool − 64 MB: a 3328 MB heap region
+mem_reserve	0x100000000
+mem_alias	0x10000000
+mem_stack	0x10000000
+app_pool	0xCD500000
+# the NPDM declares 0 MB of system resource: IsVirtualAddressMemoryEnabled is false, as on Horizon (Big Brain Academy: Brain vs. Brain sets a heap only then)
+sys_resource	0x0
+
+# ---- Shader split ----
+shader_groups	/nx/=nx /common/=common /glslc_capture/=runtime
+shader_note	Fire Emblem Warriors shaders
