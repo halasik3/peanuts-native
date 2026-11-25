@@ -1631,7 +1631,12 @@ static int stage_writes(const vka_dstate *d, int st, const vka_shader *sh, const
             int storage = r[i].desc == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             switch (r[i].what) {
             case VKA_R_BUF: ok = storage ? ssbo_desc(r[i].addr, r[i].size, bi) : ubo_desc(r[i].addr, r[i].size, bi);
-                if (ok && storage && (r[i].flags & DMSH_VK_BF_RW)) vka_tex_gw_opaque(r[i].addr, bi->range);   // the shader may store into it
+                // PEANUTS (halasik3 fork): stores through a storage buffer count as a storage texel buffer's (vka_tex_gw_tbuf) while they are not done, so a buffer
+                // texture over the range read in this submission is read in GPU order (in place, or upstream's GPU copy) and not from the CPU's bytes, which hold an
+                // older frame's stores. Fire Emblem Warriors' GPU particles: written by compute through storage buffers, read by the draws as buffer textures (2D rows,
+                // 16384x65), five buffers in turn: the row images showed the particles of five frames before while their counts (now read on the GPU) were this
+                // frame's, so torches and lights flickered. DM_VK_TBUF_GW_SB=0: as before (an opaque write: the images are uploaded again once it is done)
+                if (ok && storage && (r[i].flags & DMSH_VK_BF_RW)) { if (VKA_ENV("DM_VK_TBUF_GW", 1) && VKA_ENV("DM_VK_TBUF_GW_SB", 1)) vka_tex_gw_tbuf(r[i].addr, bi->range); else vka_tex_gw_opaque(r[i].addr, bi->range); }   // the shader may store into it
                 if (ok && storage) sb_peek_note(sh->key, st, &r[i]);
                 if (ok && !storage) ub_peek_note(sh->key, st, &r[i]);
                 if (ok) sb_watch_use(sh->key, st, &r[i], storage, bi);

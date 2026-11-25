@@ -8,9 +8,15 @@ Fire Emblem Warriors has got. Older entries move under "History".
 - **Plays: menus, movies, text, whole missions** (AYN Odin 3, Turnip), about 60 fps in battle.
 - **This build draws the special-attack and hit particles properly.** Their vertex counts are computed on the GPU, and now the GPU also
   turns them into the draw (before, the CPU guessed them too early: a hang, later black squares around torches during hits).
-- Open: black faces on some enemies (seen once).
+- **This build should stop the torch, light and mountain flicker** (while attacking or panning): particle data computed on the GPU was
+  read from a copy several frames old. `DM_VK_TBUF_GW_SB=0` brings the old behaviour back.
+- Open: dark / shadowed enemies (maybe the same cause: check with this build).
 
 ## History
+
+### Buffer textures written by storage buffers
+
+- A storage buffer's pending stores now send buffer textures over that memory to the GPU's copy instead of the CPU's bytes (`vka_draw.c` `stage_writes`). The few.8 run: torches flickered off with a dark spot, lights and mountains flickered while panning; five 16384x65 particle buffers were re-uploaded after GPU stores 65,536 times.
 
 ### Particles on the GPU
 
