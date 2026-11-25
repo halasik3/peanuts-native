@@ -657,3 +657,10 @@ ps_nx.bin	350	pixel	42307b272a178553	/nx/stage/terrain/S030-Terrain.bin.gz#GLSLC
 ps_nx.bin	351	pixel	c2e0ed5e5759fc2b	/nx/stage/terrain/S081-Terrain.bin.gz#GLSLC@0x25c0f0
 ps_nx.bin	352	pixel	554f64154159595c	/nx/stage/terrain/S081-Terrain.bin.gz#GLSLC@0x25e890
 ps_nx.bin	353	pixel	1e5731e248b7f3b6	/nx/stage/terrain/S081-Terrain.bin.gz#GLSLC@0x2612e0
+vs_runtime.bin	0	vertex	8f8eab868b7515ae	/glslc_capture/919ce6709763ff7b.glslc#GLSLC@0x0
+ps_runtime.bin	0	pixel	801a8242326d37fd	/glslc_capture/08db26f46593f4d5.glslc#GLSLC@0x0
+ps_runtime.bin	1	pixel	4ebb90a8d0ce4166	/glslc_capture/13861ef4f6ee2266.glslc#GLSLC@0x0
+ps_runtime.bin	2	pixel	325f8767a56be739	/glslc_capture/1aa9bf45c2e704b5.glslc#GLSLC@0x0
+ps_runtime.bin	3	pixel	4a9827c6eb662959	/glslc_capture/4d2dd1df8e5ab937.glslc#GLSLC@0x0
+ps_runtime.bin	4	pixel	cc9d85b6133b41e5	/glslc_capture/aa164522ccfe3d59.glslc#GLSLC@0x0
+ps_runtime.bin	5	pixel	24344858e2453d06	/glslc_capture/b5e42b30f34be321.glslc#GLSLC@0x0

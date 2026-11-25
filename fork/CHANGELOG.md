@@ -5,14 +5,17 @@ Fire Emblem Warriors has got. Older entries move under "History".
 
 ## Status: Fire Emblem Warriors (Switch, update 1.5.0)
 
-- **Profile added; first boot test next.** This build includes Fire Emblem Warriors (`0100F15003E64000`) with a provisional profile
-  made from the 1.5.0 survey. It's based on Hyrule Warriors: Definitive Edition: same KTGL engine, same memory layout.
-- Shaders: 656 found in the game's files. The 7 shaders the game compiles at boot aren't captured yet, so expect some 2D or text
-  draws to be missing even if it boots.
-- How to test: add the base game and the 1.5.0 update in Peanuts FEW, **Build** (Turnip driver first), Play, then Share log.
-- Device: AYN Thor (Adreno 740).
+- **Boots and runs at 60 fps in the menus** (first test on the AYN Odin 3, Turnip). Sound, controller and the movie decoder work.
+- **This build adds the 7 shaders the game compiles at boot.** They're the same as Hyrule Warriors: Definitive Edition's. On the first
+  build they were missing, which left the menus without text and the opening movie black. **Build** the game again in Peanuts FEW:
+  after Prepare, the app starts the game once by itself to capture them (about a minute). Then the pack is finished.
+- Not tested yet: a battle, the system driver, the AYN Thor.
 
 ## History
+
+### First boot
+
+- Boots to the menus at 60 fps on the Odin 3 (Turnip Gen8 V39). Missing: the 7 run-time GLSLC shaders (no menu text, black movie). Their keys match Hyrule Warriors: Definitive Edition's, so the profile now lists them for the in-app capture.
 
 ### Fire Emblem Warriors profile
 
