@@ -6,6 +6,7 @@ name: fork-release
 on:
   push:
     branches: [main]
+    paths-ignore: ['fork/scripts/few_survey.py', 'fork/scripts/FEW-Survey.bat', '.github/workflows/fork-survey-kit.yml']
   workflow_dispatch:
     inputs:
       force:

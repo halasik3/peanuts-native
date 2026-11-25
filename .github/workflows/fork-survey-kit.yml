@@ -1,0 +1,61 @@
+# FORK: the Windows survey kit (FEW-Survey.zip): this repository's files, FEW-Survey.bat at the top, and nximport_cli.exe built here with MSYS2,
+# so the survey needs no compiler on the PC. Published as the release "few-survey-kit", replaced on each run.
+name: fork-survey-kit
+
+on:
+  push:
+    branches: [main]
+    paths: ['fork/scripts/**', 'dm/peanuts/import/**', 'scripts/build_ipa_from_nsp.py', 'scripts/bananative.*', 'peanuts/scripts/peanuts_build.py', '.github/workflows/fork-survey-kit.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-survey-kit
+  cancel-in-progress: true
+
+jobs:
+  kit:
+    if: github.repository != 'igawa6/peanuts-native'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja zip git
+
+      - name: Build nximport_cli.exe (static)
+        run: |
+          cmake -G Ninja -S dm/peanuts/import -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS="-static" -DZLIB_USE_STATIC_LIBS=ON
+          cmake --build build --target nximport_cli
+          ldd build/nximport_cli.exe | grep -iv -E 'windows|system32' || true
+          ./build/nximport_cli.exe 2>&1 | head -5 || true
+
+      - name: Pack the kit
+        run: |
+          git config --global --add safe.directory "$(pwd)"
+          rm -rf kit && mkdir -p kit
+          git archive --format=tar --prefix=FEW-Survey/ HEAD | tar -x -C kit
+          mkdir -p kit/FEW-Survey/tools
+          cp build/nximport_cli.exe kit/FEW-Survey/tools/
+          cp fork/scripts/FEW-Survey.bat kit/FEW-Survey/FEW-Survey.bat
+          # newer than the importer's sources, so peanuts_build.py does not try to rebuild it
+          touch kit/FEW-Survey/tools/nximport_cli.exe
+          (cd kit && zip -qr -9 ../FEW-Survey.zip FEW-Survey)
+          ls -la FEW-Survey.zip
+
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete few-survey-kit --yes --cleanup-tag 2>$null
+          $notes = "Windows survey kit for Fire Emblem Warriors, built from commit $env:GITHUB_SHA.`n`n1. Unzip FEW-Survey.zip anywhere.`n2. Put the base game, the 1.5.0 update and prod.keys in C:\FEW.`n3. Double-click FEW-Survey\FEW-Survey.bat.`n4. Send C:\FEW\FEW-results.zip (no game data in it)."
+          gh release create few-survey-kit FEW-Survey.zip --target $env:GITHUB_SHA --title "FE Warriors survey kit (Windows)" --notes $notes --prerelease
