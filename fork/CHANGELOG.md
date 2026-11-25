@@ -5,13 +5,16 @@ Fire Emblem Warriors has got. Older entries move under "History".
 
 ## Status: Fire Emblem Warriors (Switch, update 1.5.0)
 
-- **Plays: menus, movies, text and battles** (AYN Odin 3, Turnip). The 7 run-time shaders are captured by Build.
-- **This build stops the freeze and crash during special attacks.** Their particle effects are drawn with vertex counts the GPU
-  computes, and the host read them too early, which made it draw billions of quads. Those draws are now skipped, so some special-attack
-  particles may be missing until the proper fix: the GPU reads the counts itself.
-- Not tested yet: the system driver, the AYN Thor.
+- **Plays: menus, movies, text, whole missions** (AYN Odin 3, Turnip), about 60 fps in battle.
+- **This build draws the special-attack and hit particles properly.** Their vertex counts are computed on the GPU, and now the GPU also
+  turns them into the draw (before, the CPU guessed them too early: a hang, later black squares around torches during hits).
+- Open: black faces on some enemies (seen once).
 
 ## History
+
+### Particles on the GPU
+
+- Non-indexed indirect quad draws are converted by a compute pass into indexed indirect draws (`vka_exec.c` `qix_convert`, `quad_indirect.comp`), so their counts are read by the GPU. `DM_VK_QUAD_IND=0` turns it off.
 
 ### Text, movies, battles
 

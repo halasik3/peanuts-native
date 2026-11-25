@@ -1,0 +1,18 @@
+// PEANUTS (halasik3 fork): NVN's indirect draws of quads, converted on the GPU. Each record { count, instances, first, base instance } (nvnCommandBufferDrawArraysIndirect,
+// copied into the buffer at word i * 4) becomes the { index count, instances, first index, vertex offset, base instance } of an indexed indirect draw over the shared quad
+// index buffer (index 6 q + j holds 4 q + {0, 1, 2, 0, 2, 3}[j]), written at word g.dst + i * 5. A first vertex that is a multiple of 4 becomes a first index, so the
+// vertex indices are first + i as NVN's are; any other first goes into the vertex offset. A draw past the shared buffer's g.cap indices is not drawn.
+#version 450
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) buffer Records { uint w[]; } b;
+layout(push_constant) uniform Args { uint n, cap, dst; } g;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= g.n) return;
+    uint count = b.w[i * 4u], inst = b.w[i * 4u + 1u], first = b.w[i * 4u + 2u], binst = b.w[i * 4u + 3u];
+    uint ic = (count >> 2) * 6u, fi = 0u, vo = first;
+    if ((first & 3u) == 0u) { fi = (first >> 2) * 6u; vo = 0u; }
+    if (fi > g.cap || ic > g.cap - fi) { ic = 0u; inst = 0u; }
+    uint o = g.dst + i * 5u;
+    b.w[o] = ic; b.w[o + 1u] = inst; b.w[o + 2u] = fi; b.w[o + 3u] = vo; b.w[o + 4u] = binst;
+}
