@@ -120,7 +120,10 @@ jobs:
       - name: Build the APK
         if: steps.gate.outputs.skip == 'false'
         run: |
-          mkdir -p ~/.android && cp fork/debug.keystore ~/.android/debug.keystore
+          # The fork's own key: Gradle's debug signing reads $ANDROID_USER_HOME/debug.keystore (the runner otherwise makes a new one each run,
+          # and an APK signed with another key will not install over the last release)
+          export ANDROID_USER_HOME="$HOME/.android"
+          mkdir -p "$ANDROID_USER_HOME" && cp fork/debug.keystore "$ANDROID_USER_HOME/debug.keystore"
           echo "sdk.dir=$ANDROID_HOME" > android/app/local.properties
           games=$(cat peanuts/release-titles.txt fork/extra-titles.txt 2>/dev/null | sed 's/#.*//' | tr -d '[:blank:]\r' | grep -E '^[0-9A-F]{16}$' | while read -r t; do [ -f "dm/games/$t/game.tsv" ] && echo "$t"; done | awk '!s[$0]++' | paste -sd, -)
           echo "games: $games"
@@ -130,6 +133,10 @@ jobs:
             -PnxApp=peanuts -PnxAppId="$APP_ID_SUFFIX" -PnxLabel="$APP_LABEL" \
             -PnxVersion="${{ steps.ver.outputs.version }}" -PnxVersionCode="${{ steps.ver.outputs.code }}" \
             -PnxGames="$games" -PnxPackStage="$STAGE_WORK/stage"
+          want=$(keytool -list -v -keystore "$ANDROID_USER_HOME/debug.keystore" -storepass android -alias androiddebugkey | sed -n 's/^.*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f')
+          got=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs out/nxnative-android-peanuts.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          echo "signer $got (fork key $want)"
+          [ -n "$got" ] && [ "$got" = "$want" ] || { echo "[RED] the APK is not signed with fork/debug.keystore: it would not install over the last release"; exit 1; }
           mkdir -p "$RUNNER_TEMP/out"
           cp out/nxnative-android-peanuts.apk "$RUNNER_TEMP/out/peanuts-few-${{ steps.ver.outputs.version }}-${{ steps.ver.outputs.sha }}.apk"
 
