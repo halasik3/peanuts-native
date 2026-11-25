@@ -8,9 +8,8 @@ Fire Emblem Warriors has got. Older entries move under "History".
 - **Plays: menus, movies, text, whole missions** (AYN Odin 3, Turnip), about 60 fps in battle.
 - **This build draws the special-attack and hit particles properly.** Their vertex counts are computed on the GPU, and now the GPU also
   turns them into the draw (before, the CPU guessed them too early: a hang, later black squares around torches during hits).
-- **This build should stop the torch, light and mountain flicker** (while attacking or panning): particle data computed on the GPU was
-  read from a copy several frames old. `DM_VK_TBUF_GW_SB=0` brings the old behaviour back.
-- Open: dark / shadowed enemies (maybe the same cause: check with this build).
+- **Torches and lights no longer flicker** (few.9): particle data computed on the GPU was read from a copy several frames old.
+- Open: dark / shadowed enemies.
 
 ## History
 
