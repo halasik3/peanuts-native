@@ -53,7 +53,7 @@ Peanuts Native 0.1.8 includes 76 games. The Companion column shows whether a gam
 | Pokémon Shield | `01008DB008C2C000` | 1.3.2 | Yes |  |
 | The Legend of Zelda: Breath of the Wild | `01007EF00011E000` | 1.6.0, 1.9.0 | Yes |  |
 | The Legend of Zelda: Tears of the Kingdom | `0100F2C0115B6000` | 1.4.3 | No |  |
-| FINAL FANTASY RESONANCE | `0100606026F12000` | 1.0.1 | No |  |
+| FINAL FANTASY RESONANCE | `0100606026F12000` | 1.0.1 | Yes |  |
 | The Legend of Zelda: Skyward Sword HD | `01002DA013484000` | 1.0.1 | Yes |  |
 | Pokémon Legends: Arceus | `01001F5010DFA000` | 1.1.1 | No |  |
 | Resident Evil 4 | `010099A00BC1E000` | 131072 | Yes |  |
@@ -77,7 +77,7 @@ Peanuts Native 0.1.8 includes 76 games. The Companion column shows whether a gam
 | Tomodachi Life: Living the Dream | `010051F0207B2000` | 1.0.4 | No | ⭐<br><a href="https://github.com/intermission88"><img src="https://img.shields.io/badge/intermission88-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="intermission88"></a><br><a href="https://github.com/davdxpx"><img src="https://img.shields.io/badge/davdxpx-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="davdxpx"></a> |
 | Unicorn Overlord | `010069401ADB8000` | 1.05 | No |  |
 | Luigi's Mansion 3 | `0100DCA0064A6000` | 1.4.0 | No |  |
-| Pokémon Legends: Z-A | `0100F43008C44000` | 2.0.2 | No |  |
+| Pokémon Legends: Z-A | `0100F43008C44000` | 2.0.2 | Yes |  |
 | STORY OF SEASONS: Grand Bazaar | `0100DAE01E4C8000` | v655360 | No | ⭐<br><a href="https://github.com/intermission88"><img src="https://img.shields.io/badge/intermission88-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="intermission88"></a> |
 | Double Dragon Revive | `01006AE02236C000` | 1.0.0, N1.10 | No | ⭐<br><a href="https://github.com/tapionallanaire"><img src="https://img.shields.io/badge/tapionallanaire-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="tapionallanaire"></a> |
 | Trails in the Sky 2nd Chapter | `01007A2027548000` | 1.0.3 | No | ⭐<br><a href="https://github.com/tapionallanaire"><img src="https://img.shields.io/badge/tapionallanaire-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="tapionallanaire"></a> |
@@ -94,7 +94,7 @@ Peanuts Native 0.1.8 includes 76 games. The Companion column shows whether a gam
 | New Pokémon Snap | `0100F4300BF2C000` | v0 | No | ⭐<br><a href="https://github.com/ssv0225"><img src="https://img.shields.io/badge/ssv0225-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="ssv0225"></a> |
 | Digimon Story Time Stranger | `010062E01FE0C000` | 1.2.2 | No | ⭐<br><a href="https://github.com/intermission88"><img src="https://img.shields.io/badge/intermission88-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="intermission88"></a> |
 | Hogwarts Legacy | `0100F7E00C70E000` | 1.0.5 | No | ⭐<br><a href="https://github.com/tapionallanaire"><img src="https://img.shields.io/badge/tapionallanaire-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="tapionallanaire"></a> |
-| Star Ocean The Second Story R | `010065301A2E0000` | 1.1.0 | No |  |
+| Star Ocean The Second Story R | `010065301A2E0000` | 1.1.0 | Yes |  |
 | Stray | `010075101EF84000` | 1.0.0 | No | ⭐<br><a href="https://github.com/dnyan007"><img src="https://img.shields.io/badge/dnyan007-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="dnyan007"></a> |
 | 13 Sentinels: Aegis Rim | `01003FC01670C000` | 1.10 | No | ⭐<br><a href="https://github.com/intermission88"><img src="https://img.shields.io/badge/intermission88-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="intermission88"></a> |
 | Captain Toad: Treasure Tracker | `01009BF0072D4000` | 1.4.2 | No | ⭐<br><a href="https://github.com/intermission88"><img src="https://img.shields.io/badge/intermission88-181717?style=flat-square&logo=github&logoColor=white" style="vertical-align: middle;" alt="intermission88"></a> |
