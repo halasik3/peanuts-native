@@ -2742,11 +2742,20 @@ static void draw_body(vka_dstate *d, const p_set_rt *rt, int has_rt, const p_sci
     // PEANUTS(upstream-candidate): indirect quad/line-loop draws read their record on the CPU instead of being skipped; general fix (Three Houses), not Peanuts-specific.
     // Quads or a line loop drawn indirectly: the indices are made on the CPU (below), so the record is read there too, as the game wrote it before the submission (one the GPU
     // writes in this same submission reads stale: logged once). Fire Emblem: Three Houses' KTGL 2D path draws some frames this way; the draws were skipped
+    // (PEANUTS: indirect quads on the GPU: non-indexed ones the look-ahead reached are now converted on the GPU instead, vka_exec.c qix_convert)
     p_draw dwc; p_draw_idx dic;
-    if (expand && ind) {
+    // PEANUTS: indirect quads on the GPU: a non-indexed indirect quad draw the look-ahead converted (vka_exec.c qix_convert) is drawn from those arguments (below)
+    VkBuffer qx_b = VK_NULL_HANDLE; VkDeviceSize qx_o = 0; int qx = expand == 1 && ind && dw && !dw->mdi_cnt && vka_qix_args(ind, &qx_b, &qx_o);
+    if (expand && ind && !qx) {
         uint32_t r[5] = {0};
         if (!cpu_read(ind, r, di ? 20 : 16)) SKIP("indirect draw of quads or a line loop: its record at %#llx is not readable: skipped", (unsigned long long)ind);
         if (!r[0] || !r[1]) return;   // indirect arguments have no implicit instance   // PEANUTS: bounded draw ranges
+        // PEANUTS: indirect quads on the GPU (a guard): a record the GPU writes in this same submission reads stale on the CPU. Fire Emblem Warriors' GPU particles
+        // (its special attacks) left values such as 1077952577 vertices / 1027424064 instances there: the expansion asked for 6-11 GB of scratch, and once it
+        // fit, a draw of billions of quads hung the GPU. Non-indexed quads are converted on the GPU (qx above); this guard stays for the indexed ones, line loops,
+        // the first non-indexed one (before the look-ahead takes them) and a record the look-ahead did not reach. More than 2^24 vertices (the indices'
+        // scratch) or 2^24 instances in one record is taken for such stale bytes
+        if (r[0] > (1u << 24) || r[1] > (1u << 24)) SKIP("indirect draw of quads or a line loop: its record at %#llx reads %u vertices x %u instances on the CPU (written by the GPU in this submission?): skipped", (unsigned long long)ind, r[0], r[1]);
         inst = r[1];
         VRED_ONCE("indirect draws of quads or a line loop read their record on the CPU at replay (first: %u vertices, %u instances)", r[0], r[1]);
         if (dw) { dwc = *dw; dwc.count = (int32_t)r[0]; dwc.instances = (int32_t)r[1]; dwc.first = (int32_t)r[2]; dwc.base_instance = (int32_t)r[3]; dwc.ind = 0; dw = &dwc; }
@@ -3120,6 +3129,11 @@ static void draw_body(vka_dstate *d, const p_set_rt *rt, int has_rt, const p_sci
             if ((uint32_t)dw->count > maxg) SKIPD(VKS_FEATURE, "mesh draw of %d workgroups: more than the device's %u in one dimension; skipped", dw->count, maxg);
             vk.vkCmdDrawMeshTasksEXT(g_cb, (uint32_t)dw->count, 1, 1);
         }
+    } else if (qx) {   // PEANUTS: indirect quads on the GPU: their indexed arguments made over the shared quad index buffer
+        VkBuffer qb; VkDeviceSize qo, qn;
+        if (!vka_qix_ib(&qb, &qo, &qn)) SKIP("indirect quads: no shared quad index buffer: skipped");
+        ib_bind(qb, qo, qn, VK_INDEX_TYPE_UINT32);
+        vk.vkCmdDrawIndexedIndirect(g_cb, qx_b, qx_o, 1, 20);
     } else if (expand) {   // quads or a line loop: the indices made here, 32-bit, in scratch memory
         uint32_t count = (uint32_t)(dw ? dw->count : di->count), *src = NULL;
         uint32_t nout = vkdi_expanded_count(expand, count);   // PEANUTS: bounded draw ranges

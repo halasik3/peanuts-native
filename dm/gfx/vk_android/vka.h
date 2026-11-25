@@ -624,6 +624,8 @@ int vka_mesh_on(void);                               // VK_EXT_mesh_shader is on
 int vka_cpu_read(uint64_t addr, void *out, size_t n);   // guest bytes as the CPU sees them now (1 = read)
 int vka_mdi_gpu(int indexed, int prim, uint32_t n, uint32_t stride);   // 1 = this indirect-count draw can issue all n records as one native multi-draw   // PEANUTS: bounded draw ranges
 int vka_mdx_args(uint64_t ind, VkBuffer *b, VkDeviceSize *o);   // an indirect mesh draw's {x, y, z} arguments: its record's {count, 1, 1} copy (vka_exec.c)
+int vka_qix_args(uint64_t ind, VkBuffer *b, VkDeviceSize *o);   // PEANUTS: indirect quads on the GPU: a draw's indexed arguments, converted (vka_exec.c qix_convert)
+int vka_qix_ib(VkBuffer *b, VkDeviceSize *o, VkDeviceSize *n);   // PEANUTS: indirect quads on the GPU: the shared quad index buffer
 int vka_rp_depth(uint32_t *w, uint32_t *h);   // the open pass has a depth / stencil attachment (*w, *h: its render area)
 void vka_rp_zstats(char *b, size_t n);   // DM_VK_PARTLOG: the depth state of the part's draws into depth targets, then reset (vka_draw.c)
 void vka_rp_note_ts(void);                 // a timestamp recorded (inside the open pass or not: counted when one is open)
