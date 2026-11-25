@@ -25,7 +25,12 @@ Status: boots and plays on Android (2026-11-25, AYN Odin 3, Adreno 830, Turnip G
 - The run-time GLSLC outputs are byte for byte Hyrule Warriors: Definitive Edition's (see Shaders).
 - SDK 3's `movie::Decoder` (taken over for Hyrule Warriors: Definitive Edition) decodes the movies on the phone's hardware decoder (`c2.qti.avc.decoder`, 1920×1080 High profile).
 
+## Effects
+
+- **Open (workaround in place): GPU particles drawn as indirect quads.** The special attacks' effects are `DrawArraysIndirect` quads whose record the GPU writes in the same submission. The Vulkan replay makes quad indices on the CPU, so it reads the record there ([Indirect draws and dispatches read by the GPU](../../../docs/reference/rendering.md#indirect-draws-and-dispatches-read-by-the-gpu)) and gets stale bytes: `indirect draws of quads or a line loop read their record on the CPU at replay (first: 1077952577 vertices, 1027424064 instances)`, then `scratch block of 6-11 GB not allocated`, and once such an expansion fit, a GPU hang during a special attack (2026-11-25, Odin 3, Turnip). Now a record of more than 2^24 vertices × instances is skipped (`vka_draw.c`, marked PEANUTS): the effect is missing instead of a hang. The fix is the GPU's own read of the record (a compute conversion into an indexed indirect draw, as the Mac's `ixc_run`). Eden's [GPU device loss during special attacks](https://github.com/eden-emulator/Issue-Reports/issues/510) looks like the same pattern.
+
 ## Open
 
-- A build with the run-time capture: the menus' text and the movies' picture.
+- Run-time capture: done, the menus' text and the movies' picture show (2026-11-25).
+- The indirect quads read on the GPU (see Effects).
 - A battle; the system driver; the AYN Thor.

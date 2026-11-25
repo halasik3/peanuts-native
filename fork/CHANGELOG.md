@@ -5,13 +5,18 @@ Fire Emblem Warriors has got. Older entries move under "History".
 
 ## Status: Fire Emblem Warriors (Switch, update 1.5.0)
 
-- **Boots and runs at 60 fps in the menus** (first test on the AYN Odin 3, Turnip). Sound, controller and the movie decoder work.
-- **This build adds the 7 shaders the game compiles at boot.** They're the same as Hyrule Warriors: Definitive Edition's. On the first
-  build they were missing, which left the menus without text and the opening movie black. **Build** the game again in Peanuts FEW:
-  after Prepare, the app starts the game once by itself to capture them (about a minute). Then the pack is finished.
-- Not tested yet: a battle, the system driver, the AYN Thor.
+- **Plays: menus, movies, text and battles** (AYN Odin 3, Turnip). The 7 run-time shaders are captured by Build.
+- **This build stops the freeze and crash during special attacks.** Their particle effects are drawn with vertex counts the GPU
+  computes, and the host read them too early, which made it draw billions of quads. Those draws are now skipped, so some special-attack
+  particles may be missing until the proper fix: the GPU reads the counts itself.
+- Not tested yet: the system driver, the AYN Thor.
 
 ## History
+
+### Text, movies, battles
+
+- The in-app capture of the 7 run-time shaders fixed the menu text and the movies.
+- A freeze and GPU hang during special attacks: GPU-written indirect quad records read stale on the CPU. Such draws are skipped for now (workaround).
 
 ### First boot
 

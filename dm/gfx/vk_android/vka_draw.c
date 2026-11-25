@@ -2747,6 +2747,10 @@ static void draw_body(vka_dstate *d, const p_set_rt *rt, int has_rt, const p_sci
         uint32_t r[5] = {0};
         if (!cpu_read(ind, r, di ? 20 : 16)) SKIP("indirect draw of quads or a line loop: its record at %#llx is not readable: skipped", (unsigned long long)ind);
         if (!r[0] || !r[1]) return;   // indirect arguments have no implicit instance   // PEANUTS: bounded draw ranges
+        // PEANUTS (halasik3 fork, workaround): a record the GPU writes in this same submission reads stale on the CPU. Fire Emblem Warriors' GPU particles
+        // (its special attacks) left values such as 1077952577 vertices / 1027424064 instances there: the expansion asked for 6-11 GB of scratch, and once it
+        // fit, a draw of billions of quads hung the GPU. Such a record is skipped. The fix is the GPU's own read (a compute conversion, as the Mac's ixc_run): open
+        if ((uint64_t)r[0] * r[1] > (1u << 24)) SKIP("indirect draw of quads or a line loop: its record at %#llx reads %u vertices x %u instances on the CPU (written by the GPU in this submission?): skipped", (unsigned long long)ind, r[0], r[1]);
         inst = r[1];
         VRED_ONCE("indirect draws of quads or a line loop read their record on the CPU at replay (first: %u vertices, %u instances)", r[0], r[1]);
         if (dw) { dwc = *dw; dwc.count = (int32_t)r[0]; dwc.instances = (int32_t)r[1]; dwc.first = (int32_t)r[2]; dwc.base_instance = (int32_t)r[3]; dwc.ind = 0; dw = &dwc; }
