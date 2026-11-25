@@ -1631,12 +1631,13 @@ static int stage_writes(const vka_dstate *d, int st, const vka_shader *sh, const
             int storage = r[i].desc == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             switch (r[i].what) {
             case VKA_R_BUF: ok = storage ? ssbo_desc(r[i].addr, r[i].size, bi) : ubo_desc(r[i].addr, r[i].size, bi);
-                // PEANUTS (halasik3 fork): stores through a storage buffer count as a storage texel buffer's (vka_tex_gw_tbuf) while they are not done, so a buffer
-                // texture over the range read in this submission is read in GPU order (in place, or upstream's GPU copy) and not from the CPU's bytes, which hold an
-                // older frame's stores. Fire Emblem Warriors' GPU particles: written by compute through storage buffers, read by the draws as buffer textures (2D rows,
-                // 16384x65), five buffers in turn: the row images showed the particles of five frames before while their counts (now read on the GPU) were this
-                // frame's, so torches and lights flickered. DM_VK_TBUF_GW_SB=0: as before (an opaque write: the images are uploaded again once it is done)
-                if (ok && storage && (r[i].flags & DMSH_VK_BF_RW)) { if (VKA_ENV("DM_VK_TBUF_GW", 1) && VKA_ENV("DM_VK_TBUF_GW_SB", 1)) vka_tex_gw_tbuf(r[i].addr, bi->range); else vka_tex_gw_opaque(r[i].addr, bi->range); }   // the shader may store into it
+                // PEANUTS: storage-buffer stores order buffer textures. With DM_VK_TBUF_GW_SB=1 (off by default; a profile turns it on through its option row and a
+                // recommend row), stores through a storage buffer count as a storage texel buffer's (vka_tex_gw_tbuf) while they are not done, so a buffer texture
+                // over the range read in this submission is read in GPU order (in place, or the GPU copy) and not from the CPU's bytes, which hold an older frame's
+                // stores. Fire Emblem Warriors' GPU particles: written by compute through storage buffers, read by the draws as buffer textures (2D rows, 16384x65),
+                // five buffers in turn: the row images showed the particles of five frames before while their counts were this frame's, and torches flickered.
+                // Off: an opaque write, the images uploaded again once it is done (docs/reference/rendering.md "Storage-buffer stores and buffer textures")
+                if (ok && storage && (r[i].flags & DMSH_VK_BF_RW)) { if (VKA_ENV("DM_VK_TBUF_GW", 1) && VKA_ENV("DM_VK_TBUF_GW_SB", 0)) vka_tex_gw_tbuf(r[i].addr, bi->range); else vka_tex_gw_opaque(r[i].addr, bi->range); }   // the shader may store into it
                 if (ok && storage) sb_peek_note(sh->key, st, &r[i]);
                 if (ok && !storage) ub_peek_note(sh->key, st, &r[i]);
                 if (ok) sb_watch_use(sh->key, st, &r[i], storage, bi);
@@ -2748,16 +2749,18 @@ static void draw_body(vka_dstate *d, const p_set_rt *rt, int has_rt, const p_sci
     // Quads or a line loop drawn indirectly: the indices are made on the CPU (below), so the record is read there too, as the game wrote it before the submission (one the GPU
     // writes in this same submission reads stale: logged once). Fire Emblem: Three Houses' KTGL 2D path draws some frames this way; the draws were skipped
     p_draw dwc; p_draw_idx dic;
-    // PEANUTS (halasik3 fork): a non-indexed indirect quad draw that the look-ahead converted on the GPU (vka_exec.c qix_convert) is drawn from those arguments (below)
+    // PEANUTS: indirect quads on the GPU: a non-indexed indirect quad draw the look-ahead converted (vka_exec.c qix_convert) is drawn from those arguments (below)
     VkBuffer qx_b = VK_NULL_HANDLE; VkDeviceSize qx_o = 0; int qx = expand == 1 && ind && dw && !dw->mdi_cnt && vka_qix_args(ind, &qx_b, &qx_o);
     if (expand && ind && !qx) {
         uint32_t r[5] = {0};
         if (!cpu_read(ind, r, di ? 20 : 16)) SKIP("indirect draw of quads or a line loop: its record at %#llx is not readable: skipped", (unsigned long long)ind);
         if (!r[0] || !r[1]) return;   // indirect arguments have no implicit instance   // PEANUTS: bounded draw ranges
-        // PEANUTS (halasik3 fork, workaround): a record the GPU writes in this same submission reads stale on the CPU. Fire Emblem Warriors' GPU particles
+        // PEANUTS: indirect quads on the GPU (a guard): a record the GPU writes in this same submission reads stale on the CPU. Fire Emblem Warriors' GPU particles
         // (its special attacks) left values such as 1077952577 vertices / 1027424064 instances there: the expansion asked for 6-11 GB of scratch, and once it
-        // fit, a draw of billions of quads hung the GPU. Non-indexed quads are now converted on the GPU (qx above); this guard stays for the indexed ones and the fallback
-        if ((uint64_t)r[0] * r[1] > (1u << 24)) SKIP("indirect draw of quads or a line loop: its record at %#llx reads %u vertices x %u instances on the CPU (written by the GPU in this submission?): skipped", (unsigned long long)ind, r[0], r[1]);
+        // fit, a draw of billions of quads hung the GPU. Non-indexed quads are converted on the GPU (qx above); this guard stays for the indexed ones, line loops,
+        // the first non-indexed one (before the look-ahead takes them) and a record the look-ahead did not reach. More than 2^24 vertices (the indices'
+        // scratch) or 2^24 instances in one record is taken for such stale bytes
+        if (r[0] > (1u << 24) || r[1] > (1u << 24)) SKIP("indirect draw of quads or a line loop: its record at %#llx reads %u vertices x %u instances on the CPU (written by the GPU in this submission?): skipped", (unsigned long long)ind, r[0], r[1]);
         inst = r[1];
         VRED_ONCE("indirect draws of quads or a line loop read their record on the CPU at replay (first: %u vertices, %u instances)", r[0], r[1]);
         if (dw) { dwc = *dw; dwc.count = (int32_t)r[0]; dwc.instances = (int32_t)r[1]; dwc.first = (int32_t)r[2]; dwc.base_instance = (int32_t)r[3]; dwc.ind = 0; dw = &dwc; }
@@ -3131,7 +3134,7 @@ static void draw_body(vka_dstate *d, const p_set_rt *rt, int has_rt, const p_sci
             if ((uint32_t)dw->count > maxg) SKIPD(VKS_FEATURE, "mesh draw of %d workgroups: more than the device's %u in one dimension; skipped", dw->count, maxg);
             vk.vkCmdDrawMeshTasksEXT(g_cb, (uint32_t)dw->count, 1, 1);
         }
-    } else if (qx) {   // PEANUTS (halasik3 fork): indirect quads, their indexed arguments made on the GPU over the shared quad index buffer
+    } else if (qx) {   // PEANUTS: indirect quads on the GPU: their indexed arguments made over the shared quad index buffer
         VkBuffer qb; VkDeviceSize qo, qn;
         if (!vka_qix_ib(&qb, &qo, &qn)) SKIP("indirect quads: no shared quad index buffer: skipped");
         ib_bind(qb, qo, qn, VK_INDEX_TYPE_UINT32);

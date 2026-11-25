@@ -13,7 +13,7 @@
 #include "vka_qsched.h"
 #include "vka_skipwarn.h"
 #include "vka_warmnote.h"   // PEANUTS
-#include "vka_quad_indirect_spv.h"   // PEANUTS (halasik3 fork): indirect quads converted on the GPU
+#include "vka_quad_indirect_spv.h"   // PEANUTS: indirect quads on the GPU
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1511,9 +1511,13 @@ enum { MDX_MAX = 1024 };
 static struct { uint64_t ind; VkBuffer buf; VkDeviceSize off; } g_mdx[MDX_MAX];
 static int g_mdx_n; static uint64_t g_mdx_ep = 1, g_mdx_scan_ep, g_mdx_sub = ~0ull, g_mdx_copies, g_mdx_splits, g_mdx_scans;
 static const uint8_t *g_xret[17]; static int g_nxret;   // exec's return points (the records after each OP_CALL being run), for the look-ahead
-static int g_qix_n;   // PEANUTS (halasik3 fork): the indirect quads converted since the last write (below)
-static void mdx_write(void) { if (g_mdx_n || g_qix_n || g_mdx_scan_ep == g_mdx_ep) { g_mdx_ep++; g_mdx_n = 0; g_qix_n = 0; } }   // PEANUTS: g_qix_n
-static void mdx_sub(void) { if (g_mdx_sub != g_n_sub) { g_mdx_sub = g_n_sub; g_mdx_ep++; g_mdx_n = 0; g_qix_n = 0; } }   // PEANUTS: g_qix_n
+static int g_qix_n;   // PEANUTS: indirect quads on the GPU: the records converted since the last write (below)
+static void qix_drop(uint64_t d, uint64_t n);
+// A write: the indirect mesh draws' copies and the quads' conversions are made again. PEANUTS: indirect quads on the GPU: a uniform-buffer update (ub) drops only the
+// conversions of records it overwrites, so a pass that updates uniforms between its quad draws is not split for each one
+static void mdx_write_ub(int ub, uint64_t d, uint64_t n) { if (g_mdx_n || g_qix_n || g_mdx_scan_ep == g_mdx_ep) { g_mdx_ep++; g_mdx_n = 0; } if (ub) qix_drop(d, n); else g_qix_n = 0; }
+static void mdx_write(void) { mdx_write_ub(0, 0, 0); }
+static void mdx_sub(void) { if (g_mdx_sub != g_n_sub) { g_mdx_sub = g_n_sub; g_mdx_ep++; g_mdx_n = 0; g_qix_n = 0; } }   // PEANUTS: g_qix_n (the conversions live in this submission's scratch)
 static int mdx_find(uint64_t ind) { for (int i = 0; i < g_mdx_n; i++) if (g_mdx[i].ind == ind) return i; return -1; }
 static int mdx_on(void) { return vka_mesh_on() && VKA_ENV("DM_VK_MESH_IND", 1); }
 static void mdx_copy(const uint64_t *inds, int n) {
@@ -1535,15 +1539,16 @@ static void mdx_copy(const uint64_t *inds, int n) {
         VLOG("indirect mesh draws: {count, first} records copied as {count, 1, 1}: %llu copies, %llu look-aheads, %llu render passes split for one", (unsigned long long)g_mdx_copies,
              (unsigned long long)g_mdx_scans, (unsigned long long)g_mdx_splits);
 }
-// PEANUTS (halasik3 fork) begin: indirect draws of quads, converted on the GPU. Vulkan has no quads, so the replay draws them as indexed triangles; drawn indirectly,
+// PEANUTS: indirect quads on the GPU (begin). Indirect draws of quads, converted on the GPU. Vulkan has no quads, so the replay draws them as indexed triangles; drawn indirectly,
 // the replay read the record on the CPU to make the indices there (vka_draw.c), and a record the GPU writes in the same submission read stale: Fire Emblem Warriors' GPU
 // particles (its special attacks and hit effects) gave counts in the billions (a GPU hang) or last time's (black squares). Here, in the same look-ahead as the indirect
 // mesh draws (mdx_scan, outside a render pass, after the records' writers), each non-indexed indirect quad record is copied into scratch memory and turned by a compute
 // pass (quad_indirect.comp) into the arguments of an indexed indirect draw over a shared quad index buffer; the draw reads them (vka_qix_args). Like the Mac's ixc_run
-// (docs/reference/rendering.md "Indirect draws and dispatches read by the GPU"). Indexed quads and line loops still read their record on the CPU. DM_VK_QUAD_IND=0: off
+// (docs/reference/rendering.md "Indirect draws and dispatches read by the GPU"). Indexed quads and line loops still read their record on the CPU. DM_VK_QUAD_IND=0: off.
+// Nothing of this runs until the first such draw (g_qix_seen, set by vka_qix_args): a game that never draws quads indirectly keeps the look-ahead as it was
 enum { QIX_QUADS = 1 << 18, QIX_CAP = QIX_QUADS * 6 };   // the shared index buffer: 262,144 quads (6 MiB)
 static struct { uint64_t ind; VkBuffer buf; VkDeviceSize off; } g_qix[MDX_MAX];
-static VkPipeline g_qix_pipe; static VkPipelineLayout g_qix_lay; static VkDescriptorSetLayout g_qix_dsl; static vka_span g_qix_ib; static uint64_t g_qix_conv, g_qix_scans;
+static int g_qix_seen; static VkPipeline g_qix_pipe; static VkPipelineLayout g_qix_lay; static VkDescriptorSetLayout g_qix_dsl; static vka_span g_qix_ib; static uint64_t g_qix_conv, g_qix_scans;
 static int qix_ready(void) {
     static int st; if (st) return st > 0;
     st = -1;
@@ -1566,67 +1571,87 @@ static int qix_ready(void) {
     st = 1; VLOG("indirect quads: their records are turned into indexed indirect draws on the GPU (shared index buffer of %d quads; DM_VK_QUAD_IND=0: read on the CPU)", QIX_QUADS);
     return 1;
 }
-static int qix_on(void) { return VKA_ENV("DM_VK_QUAD_IND", 1) && qix_ready(); }
+static int qix_on(void) { return g_qix_seen && VKA_ENV("DM_VK_QUAD_IND", 1) && qix_ready(); }
+static int qix_hit(uint64_t ind, uint64_t d, uint64_t n) { return ind < d + n && d < ind + 16; }   // a record of 16 bytes at ind meets [d, d + n)
+static void qix_drop(uint64_t d, uint64_t n) { int j = 0; for (int i = 0; i < g_qix_n; i++) if (!qix_hit(g_qix[i].ind, d, n)) g_qix[j++] = g_qix[i]; g_qix_n = j; }
 static int qix_find(uint64_t ind) { for (int i = 0; i < g_qix_n; i++) if (g_qix[i].ind == ind) return i; return -1; }
 static void qix_convert(const uint64_t *inds, int n) {
-    if (!n || g_qix_n + n > MDX_MAX) { if (n) VRED_ONCE("indirect quads: more than %d records between two writes: the rest read on the CPU", MDX_MAX); return; }
-    vka_span s; VkDeviceSize al = V.sb_align > 16 ? V.sb_align : 16, bytes = 36 * (VkDeviceSize)n;
-    if (!vka_scratch(bytes, al, &s)) { VRED_ONCE("indirect quads: no scratch memory for their conversion: read on the CPU"); return; }
-    vka_barrier(g_cb);   // after what wrote the records
+    if (!n) return;
+    if (g_qix_n + n > MDX_MAX) g_qix_n = 0;   // the table full: the earlier conversions forgotten (a draw that meets one again has it made again)
+    // A record the GPU cannot address (not in placed guest RAM, or not 4-byte aligned) keeps the CPU read: an entry without a buffer (vka_qix_args answers 0), so its draw
+    // does not split its pass for another look-ahead
+    VkBuffer rb[256]; VkDeviceSize ro[256]; uint64_t ci[256]; int m = 0;
     for (int k = 0; k < n; k++) {
-        VkBuffer b; VkDeviceSize o, d = s.off + 16 * (VkDeviceSize)k;
-        if (vka_addr(inds[k], 16, &b, &o, NULL) && !(o & 3)) { VkBufferCopy c = {o, d, 16}; vk.vkCmdCopyBuffer(g_cb, b, s.buf, 1, &c); }
-        else vk.vkCmdFillBuffer(g_cb, s.buf, d, 16, 0);   // a record not in placed guest RAM: converted as an empty draw
+        VkBuffer b; VkDeviceSize o;
+        if (m < 256 && vka_addr(inds[k], 16, &b, &o, NULL) && !(o & 3)) { rb[m] = b; ro[m] = o; ci[m++] = inds[k]; }
+        else { g_qix[g_qix_n].ind = inds[k]; g_qix[g_qix_n].buf = VK_NULL_HANDLE; g_qix[g_qix_n++].off = 0; }
     }
+    if (!m) return;
+    vka_span s; VkDeviceSize al = V.sb_align > 16 ? V.sb_align : 16, bytes = 36 * (VkDeviceSize)m;
+    if (!vka_scratch(bytes, al, &s)) {   // no scratch: these keep the CPU read too
+        VRED_ONCE("indirect quads: no scratch memory for their conversion: read on the CPU");
+        for (int k = 0; k < m; k++) { g_qix[g_qix_n].ind = ci[k]; g_qix[g_qix_n].buf = VK_NULL_HANDLE; g_qix[g_qix_n++].off = 0; }
+        return;
+    }
+    vka_barrier(g_cb);   // after what wrote the records
+    for (int k = 0; k < m; k++) { VkBufferCopy c = {ro[k], s.off + 16 * (VkDeviceSize)k, 16}; vk.vkCmdCopyBuffer(g_cb, rb[k], s.buf, 1, &c); }
     vka_barrier(g_cb);
     VkDescriptorBufferInfo bi = {s.buf, s.off, bytes};
     VkWriteDescriptorSet wr = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &bi};
-    uint32_t pc[3] = {(uint32_t)n, QIX_CAP, 4 * (uint32_t)n};
+    uint32_t pc[3] = {(uint32_t)m, QIX_CAP, 4 * (uint32_t)m};
     vk.vkCmdBindPipeline(g_cb, VK_PIPELINE_BIND_POINT_COMPUTE, g_qix_pipe);
     vk.vkCmdPushDescriptorSetKHR(g_cb, VK_PIPELINE_BIND_POINT_COMPUTE, g_qix_lay, 0, 1, &wr); vka_dyn_invalidate();   // the draws' last push is no longer bound (vka_draw.c push_same)
     vk.vkCmdPushConstants(g_cb, g_qix_lay, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof pc, pc);
-    vk.vkCmdDispatch(g_cb, ((uint32_t)n + 63) / 64, 1, 1);
+    vk.vkCmdDispatch(g_cb, ((uint32_t)m + 63) / 64, 1, 1);
     vka_barrier(g_cb);   // before the indirect reads
-    for (int k = 0; k < n; k++) { g_qix[g_qix_n].ind = inds[k]; g_qix[g_qix_n].buf = s.buf; g_qix[g_qix_n++].off = s.off + 16 * (VkDeviceSize)n + 20 * (VkDeviceSize)k; }
-    g_qix_conv += (uint64_t)n;
+    for (int k = 0; k < m; k++) { g_qix[g_qix_n].ind = ci[k]; g_qix[g_qix_n].buf = s.buf; g_qix[g_qix_n++].off = s.off + 16 * (VkDeviceSize)m + 20 * (VkDeviceSize)k; }
+    g_qix_conv += (uint64_t)m;
     if (++g_qix_scans == 1 || g_qix_scans % 20000 == 0)
         VLOG("indirect quads: %llu records converted on the GPU in %llu look-aheads", (unsigned long long)g_qix_conv, (unsigned long long)g_qix_scans);
 }
 int vka_qix_args(uint64_t ind, VkBuffer *b, VkDeviceSize *o) {
-    int i = qix_on() ? qix_find(ind) : -1; if (i < 0) return 0;
+    g_qix_seen = 1;   // the first such draw reads its record on the CPU; the look-ahead converts the next ones
+    int i = qix_on() ? qix_find(ind) : -1; if (i < 0 || !g_qix[i].buf) return 0;
     *b = g_qix[i].buf; *o = g_qix[i].off; return 1;
 }
 int vka_qix_ib(VkBuffer *b, VkDeviceSize *o, VkDeviceSize *n) { if (!qix_on()) return 0; *b = g_qix_ib.buf; *o = g_qix_ib.off; *n = 4 * (VkDeviceSize)QIX_CAP; return 1; }
 static int qix_draw(const p_draw *d) { return d && d->prim == NVN_DRAW_PRIMITIVE_QUADS && d->ind && !d->mdi_cnt; }
-// PEANUTS (halasik3 fork) end
+// PEANUTS: indirect quads on the GPU (end)
 // The indirect mesh draws from record p on (this list, then the lists that called it) up to the next write that could change a record; the copies made
 static void mdx_scan(const uint8_t *p) {
     enum { QMAX = 256 }; uint64_t q[QMAX]; int nq = 0;
-    uint64_t qq[QMAX]; int nqq = 0, mon = mdx_on(), qon = qix_on();   // PEANUTS: the indirect quads met on the way (qix_convert)
+    uint64_t qq[QMAX]; int nqq = 0, mon = mdx_on(), qon = qix_on(), ub0 = -1;   // PEANUTS: indirect quads on the GPU: the records met on the way (qix_convert)
     const uint8_t *ret[17]; int nret = g_nxret; memcpy(ret, g_xret, sizeof(ret[0]) * (size_t)nret);
     for (int guard = 0; guard < 200000 && nq < QMAX; guard++) {
         op_hdr h; memcpy(&h, p, sizeof h); const void *a = p + 8;
         if (h.op == OP_END) { if (!nret) break; p = ret[--nret]; continue; }
         if (h.op == OP_JUMP) { memcpy(&p, a, 8); continue; }
         if (h.op == OP_CALL) { if (nret == 17) break; ret[nret++] = p + h.size; memcpy(&p, a, 8); continue; }
-        if (h.op == OP_DISPATCH || h.op == OP_COPY_B2B || h.op == OP_CLEAR_BUF || h.op == OP_COPY_T2B || h.op == OP_UPDATE_UB) break;
+        if (h.op == OP_DISPATCH || h.op == OP_COPY_B2B || h.op == OP_CLEAR_BUF || h.op == OP_COPY_T2B) break;
+        if (h.op == OP_UPDATE_UB) {   // PEANUTS: indirect quads on the GPU: the mesh draws stop here, the quads go on (at most 4,096 records past the first
+            if (!qon || (ub0 >= 0 && guard - ub0 > 4096)) break;   // update, so a pass's look-ahead stays short) unless it overwrites a record met
+            if (ub0 < 0) ub0 = guard;
+            mon = 0; uint64_t d, n; memcpy(&d, a, 8); memcpy(&n, (const uint8_t *)a + 8, 8);
+            int hit = 0; for (int k = 0; k < nqq && !hit; k++) hit = qix_hit(qq[k], d, n);
+            if (hit) break;
+        }
         if (h.op == OP_DRAW) { p_draw t; const p_draw *d = draw_rec(a, h.size, &t);
             if (mon && d->prim == NVN_PRIM_MESH && d->ind && mdx_find(d->ind) < 0) { int dup = 0; for (int k = 0; k < nq && !dup; k++) dup = q[k] == d->ind; if (!dup) q[nq++] = d->ind; }
-            if (qon && qix_draw(d) && qix_find(d->ind) < 0 && nqq < QMAX) { int dup = 0; for (int k = 0; k < nqq && !dup; k++) dup = qq[k] == d->ind; if (!dup) qq[nqq++] = d->ind; } }   // PEANUTS: indirect quads
+            if (qon && qix_draw(d) && qix_find(d->ind) < 0 && nqq < QMAX) { int dup = 0; for (int k = 0; k < nqq && !dup; k++) dup = qq[k] == d->ind; if (!dup) qq[nqq++] = d->ind; } }   // PEANUTS: indirect quads on the GPU
         if (h.size < 8) break;
         p += h.size;
     }
     g_mdx_scan_ep = g_mdx_ep;
     if (nq) { g_mdx_scans++; mdx_copy(q, nq); }
-    if (nqq) qix_convert(qq, nqq);   // PEANUTS: indirect quads
+    if (nqq) qix_convert(qq, nqq);   // PEANUTS: indirect quads on the GPU
 }
 // Before a draw record: the look-ahead when a pass is about to open, a pass split for an indirect mesh draw it did not cover
 static void mdx_before_draw(const uint8_t *p, const p_draw *d) {
-    int mon = mdx_on(), qon = qix_on();   // PEANUTS: or the indirect quads' conversion
+    int mon = mdx_on(), qon = qix_on();   // PEANUTS: indirect quads on the GPU
     if (!mon && !qon) return;
     mdx_sub();
     int ind_mesh = mon && d && d->prim == NVN_PRIM_MESH && d->ind && mdx_find(d->ind) < 0;
-    int ind_quad = qon && qix_draw(d) && qix_find(d->ind) < 0;   // PEANUTS
+    int ind_quad = qon && qix_draw(d) && qix_find(d->ind) < 0;   // PEANUTS: indirect quads on the GPU
     if (!vka_rp_on()) { if (g_mdx_scan_ep != g_mdx_ep || ind_mesh || ind_quad) mdx_scan(p); return; }
     if (ind_mesh || ind_quad) { vka_rp_end(); g_mdx_splits++; mdx_scan(p); }
 }
@@ -1805,7 +1830,8 @@ static int exec(const uint8_t *p, int depth) {   // 1: parked at a wait (g_pk ho
         case OP_RESET_COUNTER: { uint64_t t; memcpy(&t, a, 8); if (t == NVN_COUNTER_TYPE_SAMPLES_PASSED) oq_reset(); break; }
         case OP_CLEAR_BUF: mdx_write(); if (g_cb) { const p_clear_buf *cb = a; vka_rw_pre(g_cb); buf_fill(cb->addr, cb->size, cb->value); vka_barrier(g_cb); vka_rw_point(g_cb, 'f', 0, cb->value, cb->addr); } break;
         case OP_COPY_B2B: mdx_write(); if (g_cb) { uint64_t s_, d, n; memcpy(&s_, a, 8); memcpy(&d, (const uint8_t *)a + 8, 8); memcpy(&n, (const uint8_t *)a + 16, 8); vka_rw_pre(g_cb); buf_copy(s_, d, n); vka_barrier(g_cb); vka_rw_point(g_cb, 'c', 0, s_, d); } break;
-        case OP_UPDATE_UB: mdx_write(); g_n_ub++; if (g_cb) { uint64_t d, n; memcpy(&d, a, 8); memcpy(&n, (const uint8_t *)a + 8, 8); if (!vka_rp_ub_defer(d, n, (const uint8_t *)a + 16)) { vka_rp_end(); vka_rw_pre(g_cb); buf_update((const uint8_t *)a + 16, d, n); vka_barrier(g_cb); vka_rw_point(g_cb, 'u', 0, n, d); } } break;
+        case OP_UPDATE_UB: { uint64_t d0, n0; memcpy(&d0, a, 8); memcpy(&n0, (const uint8_t *)a + 8, 8); mdx_write_ub(1, d0, n0); } g_n_ub++; if (g_cb) { uint64_t d, n; memcpy(&d, a, 8); memcpy(&n, (const uint8_t *)a + 8, 8);   // PEANUTS: indirect quads on the GPU (mdx_write_ub)
+            if (!vka_rp_ub_defer(d, n, (const uint8_t *)a + 16)) { vka_rp_end(); vka_rw_pre(g_cb); buf_update((const uint8_t *)a + 16, d, n); vka_barrier(g_cb); vka_rw_point(g_cb, 'u', 0, n, d); } } break;
         case OP_SET_RT: S.rt = *(const p_set_rt *)a; S.has_rt = 1; break;
         case OP_SCISSOR: S.sc = *(const p_scissor *)a; S.has_sc = 1; break;
         case OP_COPY_STRIDE: { const p_copy_stride *cs = a; if (cs->image) S.copy_img_stride = cs->stride; else S.copy_stride = cs->stride; break; }

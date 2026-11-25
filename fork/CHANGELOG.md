@@ -10,8 +10,19 @@ Fire Emblem Warriors has got. Older entries move under "History".
   turns them into the draw (before, the CPU guessed them too early: a hang, later black squares around torches during hits).
 - **Torches and lights no longer flicker** (few.9): particle data computed on the GPU was read from a copy several frames old.
 - Dark captains: the game's own look (the Switch shows them the same).
+- Qualcomm's own driver: Turnip is recommended (the system driver's compiler crashed the game in a special attack).
+- **This build: the two fixes as they would go upstream; please check that nothing got worse.** The particle-data fix is now a
+  game option, **Game settings › Game › Fresh particle data**, on by recommendation (other games keep the old behaviour). The GPU
+  conversion of particle draws now starts only once a game draws that way, keeps passes whole across uniform updates, and draws
+  very large particle pools it used to drop.
 
 ## History
+
+### Ready for upstream
+
+- `DM_VK_TBUF_GW_SB` off by default; Fire Emblem Warriors turns it on through an `option` row and a `recommend` row.
+- `qix_convert`: idle until the first non-indexed indirect quad draw; the look-ahead goes past uniform-buffer updates for quads (at most 4,096 records), a uniform update drops only the conversions it overwrites; records the GPU cannot address keep the CPU read without splitting passes; a first vertex past the shared index buffer goes into the vertex offset; the CPU path's guard is now 2^24 vertices or 2^24 instances. Checked on lavapipe (38,400 random records) and by the host's unit and Python tests.
+- Reference entries in `docs/reference/rendering.md`, rows in `docs/env_switches.tsv`.
 
 ### Buffer textures written by storage buffers
 
