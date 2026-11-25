@@ -5,12 +5,19 @@ Fire Emblem Warriors has got. Older entries move under "History".
 
 ## Status: Fire Emblem Warriors (Switch, update 1.5.0)
 
-- **Not playable yet: no profile.** The app builds from this fork, but Fire Emblem Warriors isn't in it yet.
-- Next: survey the 1.5.0 dump and write a provisional profile, based on Hyrule Warriors: Definitive Edition
-  (`dm/games/0100AE00096EA000`): same Koei Tecmo KTGL engine on NVN, same team, similar SDK.
-- Device: AYN Thor (Adreno 740). Test on both Turnip and the system driver.
+- **Profile added; first boot test next.** This build includes Fire Emblem Warriors (`0100F15003E64000`) with a provisional profile
+  made from the 1.5.0 survey. It's based on Hyrule Warriors: Definitive Edition: same KTGL engine, same memory layout.
+- Shaders: 656 found in the game's files. The 7 shaders the game compiles at boot aren't captured yet, so expect some 2D or text
+  draws to be missing even if it boots.
+- How to test: add the base game and the 1.5.0 update in Peanuts FEW, **Build** (Turnip driver first), Play, then Share log.
+- Device: AYN Thor (Adreno 740).
 
 ## History
+
+### Fire Emblem Warriors profile
+
+- Survey of 1.5.0 on Windows with the fork's survey kit; provisional profile and shader tables in `dm/games/0100F15003E64000`.
+- Added to `fork/extra-titles.txt`, so Peanuts FEW builds include it.
 
 ### Fork set up
 

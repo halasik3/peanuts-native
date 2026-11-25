@@ -5,7 +5,7 @@ For its status, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Installing
 
-- Download the APK from [Releases](../../releases/latest). It installs as **Peanuts FEW** *beside* the official Peanuts Native, with its own
+- Download the APK from [Releases](https://github.com/halasik3/peanuts-native/releases/latest). It installs as **Peanuts FEW** *beside* the official Peanuts Native, with its own
   keys, firmware, saves and packs. The official app is left alone.
 - The official app's signing key is private, so no fork can install over it. This one is signed with its own key (`fork/debug.keystore`),
   so every Peanuts FEW release installs over the previous one.

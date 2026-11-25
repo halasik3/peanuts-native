@@ -1,3 +1,4 @@
 # FORK: title IDs built into Peanuts FEW on top of peanuts/release-titles.txt, one per line (16 upper-case hex digits).
 # A line takes effect only once dm/games/<title ID>/game.tsv exists, so an ID can be listed before its profile is written.
 # Fire Emblem Warriors: add its title ID here (from the dump's survey or Eden's game properties) when the profile is added.
+0100F15003E64000

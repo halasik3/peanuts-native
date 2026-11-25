@@ -1,0 +1,39 @@
+# Fire Emblem Warriors (0100F15003E64000), update 1.5.0 (v327680). SDK 3.7.0, Koei Tecmo's KTGL engine on NVN, modules main, subsdk0 (GLSLC),
+# subsdk1 (NintendoSDK_movie), sdk. Started from the NSP script's provisional profile (2026-11-25), with Hyrule Warriors: Definitive Edition's keys
+# (0100AE00096EA000, same engine and team, SDK 3.5.1) where the two games match. Not yet booted on Android: see README.md.
+# PEANUTS: added by the halasik3/peanuts-native fork (Peanuts FEW); the shader tables are the split's output, unchanged.
+
+# ---- Identity ----
+title_id	0100F15003E64000
+program_id	0100F15003E64000
+
+# ---- App ----
+name	Fire Emblem Warriors
+ipa	FireEmblemWarriors.ipa
+app_category	public.app-category.action-games
+# the 3D gamepad layout: the camera is on the right stick (as Hyrule Warriors: Definitive Edition)
+pad_layout	full
+
+# ---- Versions ----
+build	v327680	1.5.0	main=1953770037acc52a4e28bf7aa5968c03	subsdk0=30fe832b279d4b7c7b63023c995db787	subsdk1=434bc9467960230aee33c2fad7940cc1	sdk=4fea41dd7345eca3a4ce829c398227a4
+package	v327680
+shader_versions	v327680
+
+# ---- Files ----
+# every module main imports from
+modules	main subsdk0 subsdk1 sdk
+romfs_marker	nx/sound/bgm/eng/BGMProduct.g1l
+zip_store	.arc:.g1l:.gz:.mp4:.metallib
+
+# ---- Memory ----
+# main sets a heap of at most the pool − 64 MB: a 3328 MB heap region
+mem_reserve	0x100000000
+mem_alias	0x10000000
+mem_stack	0x10000000
+app_pool	0xCD500000
+# the NPDM declares 0 MB of system resource: IsVirtualAddressMemoryEnabled is false, as on Horizon (Big Brain Academy: Brain vs. Brain sets a heap only then)
+sys_resource	0x0
+
+# ---- Shader split ----
+shader_groups	/nx/=nx /common/=common
+shader_note	Fire Emblem Warriors shaders (the 7 GLSLC run-time shaders are not captured yet)
