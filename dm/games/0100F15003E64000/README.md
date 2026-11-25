@@ -33,8 +33,10 @@ Status: boots and plays on Android (2026-11-25, AYN Odin 3, Adreno 830, Turnip G
 
 - **Dark captains are the game's look** (resolved, not a bug): the captain Myrmidons in chapter 2 have a black body with white and steel armour on the Switch too (console footage, 2026-11-25); two switches (`DM_VK_TEX_TRACK=0`, `DM_VK_POOL_FB=0`) changed nothing.
 
+- **Qualcomm's driver: Turnip recommended** (2026-11-25, Odin 3, driver version `0x80320048`). The compiler took 5-17 s for a graphics pipeline, so the menus missed draws for a while (`5 % of draws skipped … pipelines not made 17777`), and 16-52 s for `main`'s GLSLC compute shaders (`0363622862290bff`, `bd764467d27cda5c`, `5b9f2890c1bf019a`, `164b9d837b592136`), three of which failed (`compute pipeline …: -13; its dispatches are skipped`). Its allocations filled the process's memory maps (66,084 of 65,530, 63,271 of them outside the guest block, mostly anonymous 64 KiB and `scudo:secondary`), and the run ended in `std::bad_alloc` / `FATAL pthread_create` during a special attack. `game.tsv` recommends Turnip on driver ID 8, where the game plays (see Effects).
+
 ## Open
 
 - Run-time capture: done, the menus' text and the movies' picture show (2026-11-25).
 - Distant mountains appearing and disappearing with the camera: looks like the game's own draw distance (not a bug as far as seen).
-- A battle; the system driver; the AYN Thor.
+- The AYN Thor; a newer Qualcomm driver.

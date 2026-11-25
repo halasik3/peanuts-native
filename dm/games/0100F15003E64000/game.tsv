@@ -13,6 +13,9 @@ ipa	FireEmblemWarriors.ipa
 app_category	public.app-category.action-games
 # the 3D gamepad layout: the camera is on the right stick (as Hyrule Warriors: Definitive Edition)
 pad_layout	full
+# PEANUTS: Turnip on Qualcomm's own driver (README.md, Android). On the Odin 3's 0x80320048 the compiler took 5-17 s a graphics pipeline (menu draws missing
+# meanwhile) and 16-52 s a GLSLC compute pipeline, failed three of them (-13), and its allocations filled vm.max_map_count until std::bad_alloc in a special attack
+recommend	driver.id=8	driver=18
 
 # ---- Versions ----
 build	v327680	1.5.0	main=1953770037acc52a4e28bf7aa5968c03	subsdk0=30fe832b279d4b7c7b63023c995db787	subsdk1=434bc9467960230aee33c2fad7940cc1	sdk=4fea41dd7345eca3a4ce829c398227a4
