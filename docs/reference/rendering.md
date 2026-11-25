@@ -216,6 +216,14 @@ The replay on Metal (`dm/gfx/nvn/nvn_mtl.m`) and the Vulkan and OpenGL layers. E
 - **Check:** a replay of the title-screen capture (`nxreplay … DM_VK_PLACE_LAZY=0`) binds 3 buffer textures as texel buffers and 3 as row images with no `[RED]` line, and the plane draws where the live frame was black.
 
 <!-- PEANUTS(upstream-candidate): buffer → texture copies written into the texture's storage too (Android) -->
+### Storage-buffer stores and buffer textures (Android, opt-in)
+
+<!-- PEANUTS: storage-buffer stores order buffer textures -->
+- **Symptom:** (Android) GPU-simulated particles flicker, vanish or lag behind the camera while their counts are right; `a GPU write into its storage (store …) is done, re-uploaded` for the same few large textures over and over (Fire Emblem Warriors: five 16384x65 format `0xb` textures, 65,536 re-uploads in 13 minutes).
+- **Cause:** a buffer texture read through an image binding takes the CPU's bytes at recording unless a storage texel buffer's stores over its range are pending ([Buffer textures on Android](#buffer-textures-on-android)). A compute pass that writes the data through a storage buffer instead leaves no such mark, so the draws later in the same submission read the CPU's bytes: what the GPU wrote there before. With the game's buffers used in turn (five in Fire Emblem Warriors), that is the data of several frames before.
+- **Fix:** with `DM_VK_TBUF_GW_SB=1`, a storage buffer bound for writing counts as a storage texel buffer's stores (`vka_tex_gw_tbuf`) while its work is not done, so such reads go in GPU order (in place, or the GPU copy). Off by default: it can add GPU copies and split render passes in a game whose writable storage buffers overlap its buffer textures. A profile turns it on with an `option` row and a `recommend … option.DM_VK_TBUF_GW_SB=on` row.
+- **Found on:** Fire Emblem Warriors (`0100F15003E64000`, its profile in a pull request of its own, which turns this on: torches and lights; 2026-11-25, AYN Odin 3, Turnip: fixed, 59 fps in battle with it).
+
 ### A buffer → texture copy's texels in the texture's storage (Android)
 
 - **Symptom:** textures that are right at first turn into noise, half noise and half black, or black after the game has run a while (a character's print, a car's body), with no missing shader and no unknown format; the log has `a GPU write into its storage (copy …) is done, re-uploaded` for those textures, and the game makes many `nvnCommandBufferCopyBufferToBuffer` copies of whole pages, chained back to front (`memmove` by the page).
