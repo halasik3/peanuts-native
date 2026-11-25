@@ -34,6 +34,6 @@ Status: boots and plays on Android (2026-11-25, AYN Odin 3, Adreno 830, Turnip G
 ## Open
 
 - Run-time capture: done, the menus' text and the movies' picture show (2026-11-25).
-- Black / shadowed enemies (still there with few.9, so not the stale buffer textures; seen in chapter 2, Woodlands Encounter, whose enemies are ordinary Myrmidons, Soldiers and Fighters, no Monsters): compare with footage of the real console.
+- Dark captains: only the captains (named enemy units), darker shading that may shift a little with the camera; unchanged with `DM_VK_TEX_TRACK=0` and `DM_VK_POOL_FB=0` (few.9, 2026-11-25), and no log line points at them. Probably the game's own material (worn steel), not confirmed against console footage; reopen if footage shows them lit like the soldiers.
 - Distant mountains appearing and disappearing with the camera: looks like the game's own draw distance (not a bug as far as seen).
 - A battle; the system driver; the AYN Thor.
