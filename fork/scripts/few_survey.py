@@ -88,21 +88,34 @@ def main():
     # 2. the dump folder the survey and the split read (deleted at the end)
     dump = folder / f'{app}-dump'
     work = folder / f'{app}-work'
-    if dump.exists(): shutil.rmtree(dump)
-    rc = step('extract', [sys.executable, REPO / 'peanuts/scripts/nup-extract.py', nup, dump])
-    if rc: return finish(folder, app, work, dump, False)
+    if not (dump / 'base').is_dir():
+        if dump.exists(): shutil.rmtree(dump)
+        rc = step('extract', [sys.executable, REPO / 'peanuts/scripts/nup-extract.py', nup, dump])
+        if rc: return finish(folder, app, work, dump, False)
+    else:
+        say(f'reusing the extracted files in {dump}')
 
-    # 3. the survey, then the provisional profile (it stops at the first iPhone-only step after writing it; that stop is expected)
-    step('survey', [sys.executable, REPO / 'scripts/build_ipa_from_nsp.py', dump, '--survey-only', '--work-dir', work, '--progress', 'lines'])
-    step('profile', [sys.executable, REPO / 'scripts/build_ipa_from_nsp.py', dump, '--work-dir', work, '--no-heap-check', '--progress', 'lines'],
-         ok_codes=(0, 1))
+    # 3. the survey, then the provisional profile (it stops at the first iPhone-only step after writing it; that stop is expected).
+    # Both are kept in the work folder: a second run goes straight to the split
     prof = work / 'profile' / app
+    if (prof / 'game.tsv').is_file() and (dump / f'{app}_survey' / 'survey.md').is_file():
+        say(f'reusing the survey and the provisional profile in {prof}')
+    else:
+        step('survey', [sys.executable, REPO / 'scripts/build_ipa_from_nsp.py', dump, '--survey-only', '--work-dir', work, '--progress', 'lines'])
+        step('profile', [sys.executable, REPO / 'scripts/build_ipa_from_nsp.py', dump, '--work-dir', work, '--no-heap-check', '--progress', 'lines'],
+             ok_codes=(0, 1))
     if not (prof / 'game.tsv').is_file():
         say('[RED] no provisional profile was written (see logs/profile.log)')
         return finish(folder, app, work, dump, False)
 
-    # 4. the shader split into the profile's tables (NEW-GAME.md step 3): one romfs and one main per version, oldest first
-    vers = [dump / 'base'] + sorted((dump / 'updates').iterdir(), key=lambda p: int(p.name.lstrip('v') or 0)) if (dump / 'updates').is_dir() else [dump / 'base']
+    # 4. the shader split into the profile's tables (NEW-GAME.md step 3): one romfs and one main per version in the profile's shader_versions
+    # (an update's folder holds the whole RomFS and the code; the base game's has no main once an update replaces it)
+    want = []
+    for line in (prof / 'game.tsv').read_text(encoding='utf-8', errors='replace').splitlines():
+        f = line.split('\t')
+        if f[0] == 'shader_versions': want = [v for x in f[1:] for v in x.split()]
+    vers = [dump / 'base' if v in ('v0', '0') else dump / 'updates' / v.lstrip('v') for v in want] or [dump / 'base']
+    for v in vers: say(f'split reads {v}')
     romfs = ','.join(str(v / 'romfs') for v in vers)
     mains = ','.join(str(v / 'exefs' / 'main') for v in vers)
     pkg = work / 'split' / 'pkg'
@@ -116,9 +129,10 @@ def main():
 
 def finish(folder, app, work, dump, ok):
     out = results_zip(folder, app, work, dump)
-    if dump.exists():
+    if ok and dump.exists():
         say(f'deleting the extracted files {dump}')
         shutil.rmtree(dump, ignore_errors=True)
+    if not ok and dump.exists(): say(f'the extracted files stay in {dump}, so the next run starts from them')
     say(('DONE' if ok else 'STOPPED WITH AN ERROR') + f': send {out} ({out.stat().st_size / 1048576:.1f} MB)')
     LOG.close()
     with zipfile.ZipFile(out, 'a') as z: z.write(LOGS / 'few-survey.log', 'logs/few-survey.log')
