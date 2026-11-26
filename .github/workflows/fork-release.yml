@@ -1,12 +1,10 @@
 # FORK (halasik3/peanuts-native): builds the "Peanuts FEW" app and publishes it as a GitHub release with a changelog.
 # The app installs beside the official Peanuts Native (dev.nxnative.android.peanutsfew, its own data), signed with fork/debug.keystore so every
-# release installs over the previous one. Runs after each upstream sync (fork-sync.yml), on every push to main, and by hand.
+# release installs over the previous one. Runs when fork-sync.yml has merged a new upstream release, and by hand (Actions > fork-release >
+# Run workflow); pushes to main no longer build.
 name: fork-release
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['fork/scripts/few_survey.py', 'fork/scripts/FEW-Survey.bat', '.github/workflows/fork-survey-kit.yml']
   workflow_dispatch:
     inputs:
       force:

@@ -16,8 +16,8 @@ For its status, see [CHANGELOG.md](CHANGELOG.md).
 
 | Workflow | When | What |
 |---|---|---|
-| `fork-sync.yml` | every 6 hours, or by hand | merges upstream `main`, then starts a release build. A conflict or refused push opens an issue labelled `sync` |
-| `fork-release.yml` | after a sync, on every push to `main`, or by hand | builds the APK (`peanuts-few-<version>-few.<n>-<commit>.apk`) and publishes a release with notes: the status above, this fork's commits, and upstream's commits |
+| `fork-sync.yml` | every 6 hours, or by hand | looks for a new upstream release (igawa6/peanuts-native's latest GitHub release); when there is one, merges its tag, records it in `fork/upstream-release.txt` and starts a release build. A conflict or refused push opens an issue labelled `sync` |
+| `fork-release.yml` | after a sync that brought a new upstream release, or by hand (**Actions › fork-release › Run workflow**); pushes to `main` do not build | builds the APK (`peanuts-few-<version>-few.<n>-<commit>.apk`) and publishes a release with notes: the status above, this fork's commits, and upstream's commits |
 
 Fork-only files live in `fork/` and `.github/workflows/fork-*.yml`, so upstream merges don't conflict with them. Game work follows upstream's
 own rules (`peanuts/docs/NEW-GAME.md`, `PEANUTS` markers), so it can go upstream later.

@@ -12,6 +12,7 @@ git rev-parse --verify -q upstream/main >/dev/null && up="upstream/main"
 
 awk '/^## /{n++} n==1' fork/CHANGELOG.md
 echo
+[ -f fork/upstream-release.txt ] && { echo "Built on upstream release **$(tr -d '[:space:]' < fork/upstream-release.txt)** (igawa6/peanuts-native)."; echo; }
 
 echo "## Fork changes since ${prev:-the start}"
 echo

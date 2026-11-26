@@ -1,4 +1,6 @@
-# FORK (halasik3/peanuts-native): merges igawa6/peanuts-native's main into this fork's main every 6 hours, then starts fork-release.yml.
+# FORK (halasik3/peanuts-native): every 6 hours, looks for a new release of igawa6/peanuts-native (its latest GitHub release, not a pre-release).
+# When there is one, merges that release's tag into this fork's main, records it in fork/upstream-release.txt and starts fork-release.yml: the APK
+# is built only when upstream publishes a release (or by hand), not for upstream's every commit nor this fork's pushes.
 # A merge conflict, or a push GitHub refuses (upstream changed a workflow file and no SYNC_TOKEN secret is set), opens an issue instead of failing quietly.
 name: fork-sync
 
@@ -31,23 +33,45 @@ jobs:
           # Optional: a fine-grained token with Contents + Workflows write lets the sync push upstream changes to .github/workflows too.
           token: ${{ secrets.SYNC_TOKEN || github.token }}
 
-      - name: Merge upstream
+      - name: Upstream's latest release
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The latest published release (drafts and pre-releases are not "latest"); if the API cannot be reached, the highest v* tag
+          tag=$(gh api repos/igawa6/peanuts-native/releases/latest --jq .tag_name 2>/dev/null || true)
+          if [ -z "$tag" ]; then
+            tag=$(git ls-remote --tags --refs "$UPSTREAM" 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)
+          fi
+          [ -n "$tag" ] || { echo "[RED] no upstream release found"; exit 1; }
+          have=$(tr -d '[:space:]' < fork/upstream-release.txt 2>/dev/null || true)
+          echo "upstream release $tag; last synced ${have:-none}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ "$tag" = "$have" ]; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Merge upstream's release
         id: merge
+        if: steps.rel.outputs.new == 'true'
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --no-tags "$UPSTREAM" main:refs/remotes/upstream/main
-          if git merge-base --is-ancestor upstream/main HEAD; then
-            echo "Already up to date with upstream $(git rev-parse --short upstream/main)"; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          n=$(git rev-list --count HEAD..upstream/main)
-          if git merge --no-edit -m "Sync with upstream igawa6/peanuts-native ($n commits, $(git rev-parse --short upstream/main))" upstream/main; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          git fetch --no-tags "$UPSTREAM" "refs/tags/$TAG:refs/upstream-tags/$TAG"
+          if git merge-base --is-ancestor "refs/upstream-tags/$TAG" HEAD; then
+            echo "Release $TAG is already merged"
           else
-            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
-            git merge --abort
-            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            n=$(git rev-list --count "HEAD..refs/upstream-tags/$TAG")
+            if ! git merge --no-edit -m "Sync with upstream igawa6/peanuts-native release $TAG ($n commits)" "refs/upstream-tags/$TAG"; then
+              git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+              git merge --abort
+              echo "conflict=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
           fi
+          echo "$TAG" > fork/upstream-release.txt
+          git add fork/upstream-release.txt
+          git commit -q -m "Fork: built on upstream release $TAG"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push
         id: push
@@ -67,7 +91,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "The automatic sync with upstream ($UPSTREAM, \`$(git rev-parse --short upstream/main)\`) could not finish."
+            echo "The automatic sync with upstream's release ${{ steps.rel.outputs.tag }} ($UPSTREAM) could not finish."
             echo
             if [ -f "$RUNNER_TEMP/conflicts.txt" ]; then
               echo "**Merge conflict** in:"; echo; sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/conflicts.txt"
